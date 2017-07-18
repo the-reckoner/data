@@ -1,0 +1,66 @@
+.land {
+    fill: #222;
+}
+.county-boundary {
+    fill: none;
+    stroke: #fff;
+    stroke-width: .5px;
+}
+.state-boundary {
+    fill: none;
+    stroke: black;
+}
+.background {
+    fill: none;
+    pointer-events: all;
+}
+.feature {
+    fill: #ccc;
+    cursor: pointer;
+}
+.feature.active {
+    fill: red;
+}
+.mesh {
+    fill: none;
+    stroke: black;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.meshCounty {
+    stroke: white;
+}
+.extraInfo{
+    padding-top: 20px;
+    padding-left: 5px;
+}
+.stateTitle{
+    font-size: 20px;
+
+    font-weight: bolder;
+    display: block;
+    margin: auto;
+    text-align: center;
+    font-family: Arial;
+    /*fill: blue;*/
+}
+.con2016 {
+    padding-top: 30px;
+}
+.con2012{
+    padding-top: 80px;
+}
+div.tooltip {
+    color: #222;
+    background-color: #fff;
+    padding: .5em;
+    text-shadow: #f5f5f5 0 1px 0;
+    border-radius: 2px;
+    opacity: 0.9;
+    position: absolute;
+    font-family: Arial;
+    font-size: 14px;
+}
+.hidden {
+    display: none;
+}

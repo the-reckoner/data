@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+
+<head>
+    <script src="//d3js.org/d3.v3.min.js"></script>
+    <script src="//d3js.org/topojson.v1.min.js"></script>
+</head>
+
+<style type="text/css">
+@font-face {
+    font-family: "Malgun";
+    src: url(/malgun.ttf) format("truetype");
+}
+html * {
+   font-family: Malgun !important;
+}
+.land {
+    fill: #222;
+}
+.county-boundary {
+    fill: none;
+    stroke: #fff;
+    stroke-width: .5px;
+}s
+.state-boundary {
+    fill: none;
+    stroke: black;
+}
+.background {
+    fill: none;
+    pointer-events: all;
+}
+.feature {
+    fill: #ccc;
+    cursor: pointer;
+}
+.feature.active {
+    fill: red;
+}
+.mesh {
+    fill: none;
+    stroke: black;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.meshCounty {
+    stroke: white;
+}
+.extraInfo{
+    padding-top: 20px;
+    padding-left: 5px;
+}
+.stateTitle{
+    font-size: 20px;
+
+    font-weight: bolder;
+    display: block;
+    margin: auto;
+    text-align: center;
+    font-family: Arial;
+    /*fill: blue;*/
+}
+.con2016 {
+    padding-top: 30px;
+}
+.con2012{
+    padding-top: 80px;
+}
+div.tooltip {
+    color: #222;
+    background-color: #fff;
+    padding: .5em;
+    text-shadow: #f5f5f5 0 1px 0;
+    border-radius: 2px;
+    opacity: 0.9;
+    position: absolute;
+    font-family: Arial;
+    font-size: 14px;
+}
+.hidden {
+    display: none;
+}
+
+</style>
+<body>
+    <div class="whole-us" id="whole-us"></div>
+    <div class="extra-info" id="extra-info"></div>
+
+    <script>
+        var width = 900,
+            height = 450,
+            active = d3.select(null);
+
+        var projection = d3.geo.albersUsa()
+            .scale(1000)
+            .translate([width / 2, height / 2]);
+        var path = d3.geo.path()
+            .projection(projection);
+
+        var svg = d3.select(".whole-us").append("svg")
+            .attr("width", width)
+            .attr("height", height);
+
+        svg.append("rect")
+            .attr("class", "background")
+            .attr("width", width)
+            .attr("height", height)
+            .on("click", reset);
+
+        var g = svg.append("g")
+            .style("stroke-width", "1.5px"); 
+
+        var stateColour = {};
+        var stateData = {};
+        
+        //Parse in state-data
+        d3.json("/data/state-data.json", function(error, data){
+          if(error) throw error;
+
+          
+
+          data.forEach(function(d, i){
+            //console.log(d.blurb);
+            stateData[d.id] = d;
+            stateColour[d.id] = d.colour;
+          })
+
+          //console.log(stateData);
+          console.log(stateColour);
+        }) 
+
+        var tooltip = d3.select('.whole-us').append('div')
+            .attr('class', 'hidden tooltip');
+
+        d3.json("/data/us.json", function(error, us) {
+            if (error) throw error;
+
+            g.selectAll("path")
+                .data(topojson.feature(us, us.objects.states).features)
+                .enter().append("path")
+                .attr("d", path)
+                .attr("class", "feature")
+                /*.attr("name", function(d){ 
+                  for(var i = 0; i < stateData.length; i++){
+                    if(typeof stateData[d.id] === 'undefined')
+                      return "";
+                  }
+                  return stateData[d.id].name;}) */
+                .style("fill", function(d){
+                    return "#" + stateColour[d.id];
+                })
+                .on("mousemove", function (d) { 
+                    d3.select(this).style("opacity", .8); 
+                    var mouse = d3.mouse(svg.node()).map(function(d) {
+                        return parseInt(d);
+                    });
+                    tooltip.classed('hidden', false)
+                        .attr('style', 'left:' + (mouse[0] + 15) + 
+                          'px;top:' + (mouse[1] - 35) + 'px')
+                        .html(stateData[d.id].name);
+                  })
+                .on("mouseover", function(d){
+                  updateInfo(d.id);
+                })
+                .on("mouseout", function () { 
+                    tooltip.classed('hidden', true);
+                    d3.select(this).style("opacity", 1).style("fill", function(d){
+                      return "#" + stateColour[d.id];
+                    }); 
+                    updateInfo(-1);
+                  })
+                .on("click", clicked);
+
+            /*g.append("path")
+                .datum(topojson.mesh(us, us.objects.counties, function(a, b) {
+                    return a !== b;
+                }))
+                .attr("class", "meshCounty")
+                .attr("d", path); */
+
+            g.append("path")
+                .datum(topojson.mesh(us, us.objects.states, function(a, b) {
+                    return a !== b;
+                }))
+                .attr("class", "mesh")
+                .attr("d", path)
+                .on("click", clicked); 
+
+            updateInfo(-1); //Initialize with US data
+        });
+
+        function clicked(d) {
+            if (active.node() === this) return reset();
+            active.classed("active", false);
+            active = d3.select(this).classed("active", true);
+
+            console.log(d3.select(this).attr("name"));
+
+            var bounds = path.bounds(d),
+                dx = bounds[1][0] - bounds[0][0],
+                dy = bounds[1][1] - bounds[0][1],
+                x = (bounds[0][0] + bounds[1][0]) / 2,
+                y = (bounds[0][1] + bounds[1][1]) / 2,
+                scale = .9 / Math.max(dx / width, dy / height),
+                translate = [width / 2 - scale * x, height / 2 - scale * y];
+
+            g.transition()
+                .duration(750)
+                .style("stroke-width", 1.5 / scale + "px")
+                .attr("transform", "translate(" + translate + ")scale(" + scale + ")");
+        }
+
+        function reset() {
+            active.classed("active", false);
+            active = d3.select(null);
+
+            g.transition()
+                .duration(750)
+                .style("stroke-width", "1.5px")
+                .attr("transform", "");
+        }
+
+        d3.select(self.frameElement).style("height", height + "px");
+
+
+        /* ********** INFO ********** */
+
+        var svgContainer = d3.select(".extra-info").append("svg")
+                                    .attr("width", 850)
+                                    .attr("height", 200)
+                                    .attr("class", "extraInfo");                                   
+
+        
+        var usData = {
+            "id": "",
+            "code": "US",
+            "name": "United States",
+            "colour": "",
+            "electoralVotes": 538,
+            "party2016": "Republican",
+            "trump": 47.2,
+            "clinton": 47.8,
+            "other2016": 5,
+            "party2012": "Democratic",
+            "obama": 51.1,
+            "romney": 47.2,
+            "other2012": 1.7,
+            "blurb": "This year, Republican nominee Donald Trump (estimated 306 electoral votes) won the Electoral College and the presidency over Democratic candidate Hillary Clinton (232 electoral votes), but how did each state vote? Hover over each state to find general information about the demographics and voting patterns, and click to zoom in."
+        };  //National results
+
+
+        function updateInfo (index){
+          //index = -1 is US
+
+            svgContainer.selectAll("text").remove();
+            svgContainer.selectAll("svg").remove();
+            svgContainer.selectAll("foreignObject").remove();
+
+            var title = svgContainer.append("svg:text")
+                .attr("font-size", "20px")
+                .attr('class', 'stateTitle')
+                .attr("text-align", "center")
+                .style("font-family", "Arial")
+                .text(function(){
+                  if(index == -1)
+                    return usData.name + " - " + usData.electoralVotes + " electoral votes";
+                  return stateData[index].name + " - " + stateData[index].electoralVotes + " electoral votes";})
+                .attr("index", index)
+                .style("fill", function(){
+                  if(index == -1)
+                    return "red";
+                  else if(stateData[index].party2016 == "Republican")
+                    return "red";
+                  else
+                    return "blue";
+                })
+                .style("font-weight", "strong");
+ 
+            var container2016 = svgContainer.append("svg")
+                .style("class", "con2016")
+                .attr("width", 300)
+                .attr("height", 50);
+
+            container2016.append("svg:text")
+              .text("2016 - Clinton vs Trump")
+              .style("font-family", "Arial")
+              .style("font-size", "14px")    
+              .attr("transform", "translate(" + 0 + "," + 25 + ")");
+
+            var clinton = container2016.append("rect")
+                .attr("height", 20)
+                .attr("width", function(){
+                    if(index == -1)
+                        return usData.clinton *2;
+                    return stateData[index].clinton * 2;
+                })
+                .attr('fill', 'blue')
+                .attr("transform", "translate(" + 0 + "," + 30 + ")");
+
+            container2016.append("svg:text")
+                .text(function(){
+                  if(index == -1)
+                    return usData.clinton;
+                  return stateData[index].clinton;
+                })
+                .style("fill", "white")
+                .style("font-family", "Arial")
+                .style("font-size", "14px") 
+                .attr("transform", "translate(" + 5 + "," + 45 + ")");    
+
+            var other2016 = container2016.append("rect")
+              .attr("height", 20)
+              .attr("width", function(){
+                  if(index == -1)
+                      return usData.other2016 * 2;
+                  return stateData[index].other2016 * 2;
+              })
+              .attr('fill', 'lightGrey')
+              .attr("transform", function(){
+                if(index == -1)
+                  return "translate(" + usData.clinton * 2 + "," + 30 + ")";
+                return "translate(" + stateData[index].clinton * 2 + "," + 30 + ")";
+              });
+
+            var trump = container2016.append("rect")
+                .attr("height", 20)
+                .attr("width", function(){
+                    if(index == -1)
+                        return usData.trump *2;
+                    return stateData[index].trump * 2;
+                })
+                .attr('fill', 'red')
+                .attr("transform", function(){
+                  if(index == -1)
+                    return "translate(" + (usData.clinton + usData.other2016) *2 + "," + 30 + ")";
+                  return "translate(" + (stateData[index].clinton + stateData[index].other2016) * 2 + "," + 30 + ")";
+                });
+
+            container2016.append("svg:text")
+                .text(function(){
+                  if(index == -1)
+                    return usData.trump;
+                  return stateData[index].trump;
+                })
+                .style("fill", "white")
+                .style("font-family", "Arial")
+                .style("font-size", "14px") 
+                .attr("transform", function(){
+                  if(index == -1)
+                    return "translate(" + ((usData.clinton + usData.other2016) *2 + 5) + "," + 45 + ")";
+                  return "translate(" + ((stateData[index].clinton + stateData[index].other2016) * 2 + 5) + "," + 45 + ")";
+                });
+
+            /**** 2012 *****/
+            var container2012 = svgContainer.append("svg")
+                .style("class", "con2012")
+                .attr("width", 300)
+                .attr("height", 115);
+
+            container2012.append("svg:text")
+                .text("2012 - Obama vs Romney")
+                .style("font-family", "Arial")
+                .style("font-size", "14px") 
+                .attr("transform", "translate(" + 0 + "," + 70 + ")");
+
+            var obama = container2012.append("rect")
+                .attr("height", 20)
+                .attr("width", function(){
+                    if (index == -1)
+                        return usData.obama *2;
+                    return stateData[index].obama * 2;
+                })
+                .attr('fill', 'blue')
+                .attr("transform", "translate(" + 0 + "," + 75 + ")");
+
+            container2012.append("svg:text")
+                .text(function(){
+                  if(index == -1)
+                      return usData.obama;
+                  return stateData[index].obama;  
+                })
+                .style("fill", "white")
+                .style("font-family", "Arial")
+                .style("font-size", "14px") 
+                .attr("transform", "translate(" + 5 + "," + 90 + ")");    
+
+            var other2012 = container2012.append("rect")
+              .attr("height", 20)
+              .attr("width", function(){
+                  if(index == -1)
+                    return usData.other2012 *2;
+                  return stateData[index].other2012 * 2;
+              })
+              .attr('fill', 'lightGrey')
+              .attr("transform", function(){
+                if(index ==-1)
+                  return "translate(" + usData.obama * 2 + "," + 75 + ")";
+                return "translate(" + stateData[index].obama * 2 + "," + 75 + ")";
+              });
+
+            var romney = container2012.append("rect")
+                .attr("height", 20)
+                .attr("width", function(){
+                    if(index == -1)
+                      return usData.romney *2;
+                    return stateData[index].romney * 2;
+                })
+                .attr('fill', 'red')
+                .attr("transform", function(){
+                  if(index == -1)
+                    return "translate(" + (usData.obama + usData.other2012) * 2 + "," + 75 + ")";
+                  return "translate(" + (stateData[index].obama + stateData[index].other2012) * 2 + "," + 75 + ")";
+                });
+
+            container2012.append("svg:text")
+                .text(function(){
+                  if(index == -1)
+                    return usData.romney;
+                  return stateData[index].romney;
+                })
+                .style("fill", "white")
+                .style("font-family", "Arial")
+                .style("font-size", "14px") 
+                .attr("transform", function(){
+                  if(index == -1)
+                    return "translate(" + ((usData.obama + usData.other2012) * 2 + 5) + "," + 90 + ")";
+                  return "translate(" + ((stateData[index].obama + stateData[index].other2012) * 2 + 5) + "," + 90 + ")";
+                });
+
+            /***** Blurb *****/
+
+            var blurbContainer =  svgContainer.append("svg")
+                                      .attr("width", 800)
+                                      .attr("height", 200);    
+            blurbContainer.append("foreignObject")
+                .attr("width", 575)
+                .attr("height", 200)
+                .style("font-family", "Arial")
+                .style("font-size", "14px")
+                .text(function(){
+                  if(index == -1)
+                    return usData.blurb;
+                  return stateData[index].blurb;
+                })                                     
+                .attr("transform", "translate(" + 225 + "," + 10 + ")"); 
+
+            /******* Map Info *******/
+            svgContainer.append("foreignObject")
+                .attr("width", 200)
+                .attr("height", 200)
+                .style("font-family", "Arial")
+                .style("font-size", "14px")
+                .text("The map is coloured by percentage of victory: red means a large Republican victory, blue a large Demoratic victory, and purple meaning a close to 50-50 split.")
+                .style("font-size", "12px")    
+                .attr("transform", "translate(" + 0 + "," + 105 + ")"); 
+        }
+    </script>
+</body>
